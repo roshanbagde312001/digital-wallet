@@ -1,11 +1,9 @@
 const service = require("../services/user.service");
-const {validataUserRegisteration} = require("../validations/user.validation");
+const {validataUserRegisteration,validateUpdate} = require("../validations/user.validation");
 
 
 exports.register = async(req,res)=>{
     try{
-    console.log("roshsn ",req.body)
-
         validataUserRegisteration(req.body);
         const user = await service.createUser(
             req.body,
@@ -19,3 +17,21 @@ exports.register = async(req,res)=>{
         });
     }
 };
+
+exports.updateUser = async(req,res)=>{
+    try{
+        validateUpdate(req.body)
+
+        const usersupdat =await service.updateUser(req.params.id,
+            req.body,
+            req.ip
+        )
+        console.log(usersupdat)
+        res.status(200).json(usersupdat)
+    }catch(error){
+         res.status(400)
+        res.status(400).json({
+            message:error.message
+        });
+    }
+}

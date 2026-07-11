@@ -5,5 +5,6 @@ const router = express.Router();
 
 router.get("/",authMiddleware,controller.getWallet);
 router.post("/deposit",authMiddleware,controller.deposit);
+router.post("/withdraw",authMiddleware,controller.widDraw);
 
 module.exports = router;

@@ -102,12 +102,94 @@ exports.deposit = async (userId, amount) => {
                 }
 
             });
+        wallet.balance = newBalance;
         return {
             wallet,
             tranction
         };
     } catch (error) {
         (await t).rollback();
+        throw error;
+    }
+}
+
+
+exports.withDraw = async (userId, amount) => {
+
+    const t = await sequelize.transaction();
+
+    try {
+
+        const wallet = await Wallet.findOne({
+            where: {
+                userId: userId
+            },
+            transaction: t,
+            lock: 'UPDATE'
+        })
+
+        if (!wallet) {
+            throw new Error("Wallet not found")
+        }
+
+        if (wallet.status !== "ACTIVE") {
+            throw new Error("Wallet is not active");
+        }
+
+        const withdrawmount = Number(amount);
+        const oldBalance = Number(wallet.balance);
+
+        if (oldBalance < withdrawmount) {
+            throw new Error("Insufficient wallet balance")
+        }
+
+        const newBalance = oldBalance - withdrawmount;
+        await Wallet.update({
+            balance: newBalance
+        }, { where: { id: wallet.id }, transaction: t })
+
+
+        const transaction =
+            await Transaction.create({
+                senderWalletId: wallet.id,
+                receiverWalletId: null,
+                transactionType: "WITHDRAW",
+                senderAmount: withdrawmount,
+                senderCurrency: wallet.currency,
+                receiverAmount: null,
+                receiverCurrency: null,
+                exchangeRate: 1,
+                status: "SUCCESS",
+                description: "Wallet withdrawal"
+
+            }, {
+                transaction: t
+            });
+
+        await t.commit();
+        await createAudit({
+            userId: userId,
+            action: "WITHDRAW",
+            entity: "TRANSACTION",
+            entityId: transaction.id,
+            oldValue: {
+                balance: oldBalance
+            },
+            newValue: {
+                balance: newBalance,
+                amount: withdrawmount,
+                currency: wallet.currency
+            }
+        });
+
+        wallet.balance = newBalance;
+        return {
+            wallet,
+            transaction
+        };
+    } catch (error) {
+        await t.rollback();
+
         throw error;
     }
 }

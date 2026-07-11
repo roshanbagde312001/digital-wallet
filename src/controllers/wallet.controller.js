@@ -1,5 +1,5 @@
 const walletService = require("../services/wallet.service");
-const { validateDeposit } = require("../validations/wallet.validation");
+const { validateDeposit, validateWithdraw } = require("../validations/wallet.validation");
 
 
 exports.getWallet = async (req, res) => {
@@ -46,5 +46,25 @@ exports.deposit = async (req, res) => {
             success:false,
             message:error.message
         });
+    }
+}
+
+exports.widDraw = async(req,res)=>{
+    try{
+        validateWithdraw(req.body);
+
+        const result = await walletService.withDraw(req.user.id,req.body.amount);
+        
+        return res.status(200).json({
+            success:true,
+            message:"Withdrawal successful",
+            data:result
+        });
+    
+    }catch(error){
+        return res.status(400).json({
+            success:false,
+            message:error.message
+        })
     }
 }

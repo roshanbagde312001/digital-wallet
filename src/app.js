@@ -2,7 +2,7 @@ const express = require("express")
 const cors = require("cors")
 const helmet = require("helmet")
 const morgan = require("morgan")
-
+const userRouter = require("./routes/user.routes")
 const app = express();
 
 // MIddlewares 
@@ -13,7 +13,7 @@ app.use(cors());
 app.use(helmet());
 app.use(morgan("dev"));
 
-
+app.use("/api/users",userRouter)
 // health check api
 
 app.get("/api/healths",(req,res)=>{

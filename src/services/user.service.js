@@ -7,7 +7,6 @@ const {createAudit} = require("../utils/audit")
 
 
 exports.createUser = async(data,ip)=>{
-
     const existingUser = await User.findOne({
         where:{
             email:data.email

@@ -1,7 +1,12 @@
 const service = require("../services/user.service");
+const {validataUserRegisteration} = require("../validations/user.validation");
+
 
 exports.register = async(req,res)=>{
     try{
+    console.log("roshsn ",req.body)
+
+        validataUserRegisteration(req.body);
         const user = await service.createUser(
             req.body,
             req.ip

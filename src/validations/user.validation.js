@@ -17,8 +17,12 @@ const validataUserRegisteration= (data)=>{
     if(!validator.isEmail(data.email)){
         throw new Error("Please provide a valid email address");
     }
+
+     if(data.password.length < 6){
+        throw new Error("Password must be at least 6 characters");
+    }
 }
 
 module.exports={
-    validateRegister,
+    validataUserRegisteration,
 };

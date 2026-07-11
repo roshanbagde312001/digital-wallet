@@ -1,23 +1,113 @@
-const {Wallet}  = require("../models")
+const sequelize = require("../config/database");
+const { Wallet, Transaction } = require("../models")
 const { createAudit } = require("../utils/audit")
-
-exports.creatWallet = async(user,options)=>{
-    console.log("rosns",user.dataValues.id)
+exports.creatWallet = async (user, options) => {
+    console.log("rosns", user.dataValues.id)
     const wallet = await Wallet.findOne({
-        where:{
-            userId:user.id
+        where: {
+            userId: user.id
         }
     });
 
-    if(wallet){
+    if (wallet) {
         return wallet;
     }
 
     const newWallet = await Wallet.create({
-        userId:user.id,
-        balance:0.0,
+        userId: user.id,
+        balance: 0.0,
         currency: user.defaultCurrency || "USD"
-    },options)
+    }, options)
 
-return newWallet;
+    return newWallet;
+}
+
+exports.getWalletbyUserId = async (userId) => {
+
+    const wallet = await Wallet.findOne({
+        where: {
+            userId: userId
+        }
+    });
+
+    if (!wallet) {
+        throw new Error("Wallet not found");
+    }
+
+    return wallet;
+}
+
+
+exports.deposit = async (userId, amount) => {
+    const t = await sequelize.transaction();
+
+    try {
+        const wallet = await Wallet.findOne({
+            where: {
+                userId
+            },
+            transaction: t,
+            lock: 'UPDATE'
+        });
+
+        console.log(wallet)
+
+
+        if (!wallet) {
+            throw new Error("Wallet not found");
+        }
+
+
+
+        if (wallet.status != "ACTIVE") {
+            throw new Error("Wallet is not active");
+        }
+        const oldBalance = Number(wallet.balance);
+        const depositAmount = Number(amount)
+        const newBalance = oldBalance + depositAmount;
+
+        await Wallet.update({
+            balance: newBalance
+        }, { where: { id: wallet.id }, transaction: t })
+
+
+        const tranction = await Transaction.create({
+            senderWalletId: null,
+            receiverWalletId: wallet.id,
+            transactionType: "DEPOSIT",
+            senderAmount: null,
+            senderCurrency: null,
+            receiverAmount: depositAmount,
+            receiverCurrency: wallet.currency,
+            exchangeRate: 1,
+            status: "SUCCESS",
+            description: "Wallet deposit"
+        }, { transaction: t })
+        await t.commit();
+
+
+        await createAudit(
+            {
+                userId: userId,
+                action: "DEPOSIT",
+                entity: "TRANSACTION",
+                entityId: tranction.id,
+                oldValue: {
+                    balance: oldBalance
+                },
+                newValue: {
+                    balance: newBalance,
+                    amount: depositAmount,
+                    currency: wallet.currency
+                }
+
+            });
+        return {
+            wallet,
+            tranction
+        };
+    } catch (error) {
+        (await t).rollback();
+        throw error;
+    }
 }

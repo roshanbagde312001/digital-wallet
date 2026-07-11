@@ -3,6 +3,8 @@ const cors = require("cors")
 const helmet = require("helmet")
 const morgan = require("morgan")
 const userRouter = require("./routes/user.routes")
+const walletRoutes = require("./routes/wallet.routes");
+
 const app = express();
 
 // MIddlewares 
@@ -14,6 +16,7 @@ app.use(helmet());
 app.use(morgan("dev"));
 
 app.use("/api/users",userRouter)
+app.use("/api/wallet",walletRoutes)
 // health check api
 
 app.get("/api/healths",(req,res)=>{

@@ -1,7 +1,7 @@
 const User = require("./User");
 const AuditLog = require("./AuditLog");
 const Wallet = require("./Wallet");
-
+const Transaction= require("./Transaction")
 User.hasMany(
     AuditLog,
     {
@@ -35,10 +35,37 @@ Wallet.belongsTo(
     }
 );
 
+Wallet.hasMany(Transaction,{
+    foreignKey:"senderWalletId",
+    as:"sentTransactions"
+});
+
+
+Wallet.hasMany(Transaction,{
+    foreignKey:"receiverWalletId",
+    as:"receivedTransactions"
+});
+
+
+Transaction.belongsTo(Wallet,{
+    foreignKey:"senderWalletId",
+    as:"senderWallet"
+});
+
+
+Transaction.belongsTo(Wallet,{
+    foreignKey:"receiverWalletId",
+    as:"receiverWallet"
+});
+
+
 
 module.exports = {
     User,
     AuditLog,
-    Wallet
+    Wallet,
+    Transaction
 };
+
+
 

@@ -61,3 +61,14 @@ exports.updateUser = async (id, data, ip) => {
 
     return newdata;
 }
+
+exports.getUserById = async(id)=>{
+    const user = await User.findByPk(id)
+    return user;
+}
+
+exports.getAllUser = async()=>{
+
+    const allusers = await User.findAll()
+    return allusers;
+}

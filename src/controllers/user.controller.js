@@ -1,7 +1,6 @@
 const service = require("../services/user.service");
 const {validataUserRegisteration,validateUpdate} = require("../validations/user.validation");
 
-
 exports.register = async(req,res)=>{
     try{
         validataUserRegisteration(req.body);
@@ -26,10 +25,37 @@ exports.updateUser = async(req,res)=>{
             req.body,
             req.ip
         )
-        console.log(usersupdat)
         res.status(200).json(usersupdat)
     }catch(error){
          res.status(400)
+        res.status(400).json({
+            message:error.message
+        });
+    }
+}
+
+exports.getProfile = async(req,res)=>{
+    try{
+        const userDetails = await service.getUserById(
+            req.params.id
+        )
+
+        res.status(200).json(userDetails)
+    }catch(error){
+         res.status(400)
+        res.status(400).json({
+            message:error.message
+        });
+    }
+}
+
+
+exports.getAllUser = async(req,res)=>{
+    try{
+         const userData = await service.getAllUser()
+        res.status(200).json(userData)
+    }catch(error){
+          res.status(400)
         res.status(400).json({
             message:error.message
         });

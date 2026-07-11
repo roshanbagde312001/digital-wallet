@@ -1,10 +1,10 @@
 const bcrypt = require("bcrypt")
 
-const { User } = require("../models")
+const { User} = require("../models")
 const { generateToken } = require("../utils/jwt")
-
+const sequelize = require("../config/database");
 const { createAudit } = require("../utils/audit")
-
+const  walletService = require("./wallet.service")
 
 exports.createUser = async (data, ip) => {
     const existingUser = await User.findOne({
@@ -19,12 +19,18 @@ exports.createUser = async (data, ip) => {
 
     const password = await bcrypt.hash(data.password, 10);
 
+const t = await sequelize.transaction();
+    try{
+
     const user = await User.create({
         name: data.name,
         email: data.email,
         password,
         defaultCurrency: data.defaultCurrency || "USD"
-    })
+    },{ transaction: t })
+
+    const wallet = await walletService.creatWallet(user,{ transaction: t })
+    await t.commit();
 
     await createAudit({
         userId: user.id,
@@ -35,7 +41,23 @@ exports.createUser = async (data, ip) => {
         ipAddress: ip
     });
 
+    await createAudit({
+        userId:user.id,
+        action:"WALLET_CREATED",
+        entity:"WALLET",
+        entityId:wallet.id,
+        newValue:{
+            walletId:wallet.id,
+            currency:wallet.currency,
+            balance:wallet.balance
+        }
+
+    });
     return user;
+    }catch(error){
+        await t.rollback();
+        throw error;
+    }
 }
 
 exports.updateUser = async (id, data, ip) => {

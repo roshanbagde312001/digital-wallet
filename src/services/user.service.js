@@ -1,7 +1,7 @@
 const bcrypt = require("bcrypt")
 
 const { User } = require("../models")
-
+const { generateToken } = require("../utils/jwt")
 
 const { createAudit } = require("../utils/audit")
 
@@ -46,8 +46,8 @@ exports.updateUser = async (id, data, ip) => {
     }
 
     const oldData = user.toJSON();
-    
-   let newdata =  await user.update(data)
+
+    let newdata = await user.update(data)
 
     await createAudit({
         userId: user.id,
@@ -62,13 +62,52 @@ exports.updateUser = async (id, data, ip) => {
     return newdata;
 }
 
-exports.getUserById = async(id)=>{
+exports.getUserById = async (id) => {
     const user = await User.findByPk(id)
     return user;
 }
 
-exports.getAllUser = async()=>{
+exports.getAllUser = async () => {
 
     const allusers = await User.findAll()
     return allusers;
 }
+
+exports.login = async (data, ip) => {
+
+    const user = await User.findOne({
+        where: {
+            email: data.email
+        }
+    });
+
+    if (!user) {
+        throw new Error("Invalid credentials");
+    }
+
+    const valid = await bcrypt.compare(data.password, user.password);
+
+    if (!valid) {
+        throw new Error("Invalid credentials")
+    }
+
+    await createAudit({
+        serId: user.id,
+        action: "LOGIN",
+        entity: "USER",
+        entityId: user.id,
+        ipAddress: ip
+    })
+
+
+    return {
+        token: generateToken(user),
+        user: {
+            id: user.id,
+            name: user.name,
+            email: user.email
+        }
+
+    };
+}
+

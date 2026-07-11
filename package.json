@@ -17,8 +17,11 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "helmet": "^8.2.0",
+    "install": "^0.13.0",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.11.0",
     "mysql2": "^3.22.6",
+    "npm": "^11.18.0",
     "sequelize": "^6.37.8",
     "validator": "^13.15.35"
   },

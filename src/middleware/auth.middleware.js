@@ -11,13 +11,14 @@ module.exports = (req, res, next) => {
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET)
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            return res.status(500).json({ message: 'Server JWT_SECRET not configured' });
+        }
+        const decoded = jwt.verify(token, secret)
         req.user = decoded;
         next();
     } catch (error) {
-        return res.status(401)
-            .json({
-                message: "Invalid token"
-            });
+        return res.status(401).json({ message: "Invalid token" });
     }
 }

@@ -1,17 +1,23 @@
+require('dotenv').config();
 const jwt = require("jsonwebtoken");
 
-const generateToken = (user)=>{
+const SECRET = process.env.JWT_SECRET;
+if (!SECRET) {
+    throw new Error('JWT_SECRET is not set in environment; set JWT_SECRET in .env');
+}
+
+const generateToken = (user) => {
     return jwt.sign(
         {
-            id:user.id,
-            email:user.email
+            id: user.id,
+            email: user.email
         },
-        process.env.JWT_SECRET,
+        SECRET,
         {
-            expiresIn:"1d"
+            expiresIn: "1d"
         }
     );
 
 };
 
-module.exports={generateToken};
+module.exports = { generateToken };

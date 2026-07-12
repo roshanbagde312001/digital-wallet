@@ -1,4 +1,6 @@
 # Dependencies
 node_modules/
+.env
+.DS_Store
 
 # Logs and Debug Files

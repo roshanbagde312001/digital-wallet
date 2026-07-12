@@ -1,11 +1,18 @@
 const express = require("express");
 const controller = require("../controllers/wallet.controller")
 const authMiddleware = require("../middleware/auth.middleware")
+const {
+    userMinuteRateLimiter,
+    userHourRateLimiter,
+    transactionRateLimiter
+} = require("../middleware/rate-limit.middleware");
 const router = express.Router();
 
-router.get("/",authMiddleware,controller.getWallet);
-router.post("/deposit",authMiddleware,controller.deposit);
-router.post("/withdraw",authMiddleware,controller.widDraw);
-router.post("/transfer",authMiddleware,controller.transfer)
+router.use(authMiddleware, userMinuteRateLimiter, userHourRateLimiter);
+
+router.get("/", controller.getWallet);
+router.post("/deposit", transactionRateLimiter, controller.deposit);
+router.post("/withdraw", transactionRateLimiter, controller.widDraw);
+router.post("/transfer", transactionRateLimiter, controller.transfer)
 
 module.exports = router;

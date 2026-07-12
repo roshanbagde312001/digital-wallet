@@ -14,6 +14,7 @@ A REST API for managing user accounts and single-currency digital wallets. Users
 - [Database setup](#database-setup)
 - [API reference](#api-reference)
 - [Authentication](#authentication)
+- [API rate limiting and request throttling](#api-rate-limiting-and-request-throttling)
 - [Data model](#data-model)
 - [Application flow](#application-flow)
 - [Project structure](#project-structure)
@@ -99,6 +100,13 @@ DB_PASSWORD=replace-with-your-password
 
 # Required by login and every protected endpoint. Use a long random value.
 JWT_SECRET=replace-with-a-long-random-secret
+
+# API rate limiting (optional defaults shown)
+AUTH_RATE_LIMIT_MAX=10
+AUTH_RATE_LIMIT_WINDOW_MS=900000
+USER_RATE_LIMIT_PER_MINUTE=60
+USER_RATE_LIMIT_PER_HOUR=1000
+TRANSACTION_RATE_LIMIT_PER_MINUTE=10
 ```
 
 | Variable | Required | Description |
@@ -111,6 +119,11 @@ JWT_SECRET=replace-with-a-long-random-secret
 | `DB_USER` | Yes | Database user. |
 | `DB_PASSWORD` | Yes | Database password. |
 | `JWT_SECRET` | Yes | Secret used to sign and verify access tokens. |
+| `AUTH_RATE_LIMIT_MAX` | No | Login/registration requests allowed per IP in the authentication window. Defaults to `10`. |
+| `AUTH_RATE_LIMIT_WINDOW_MS` | No | Authentication limit window in milliseconds. Defaults to `900000` (15 minutes). |
+| `USER_RATE_LIMIT_PER_MINUTE` | No | Authenticated API requests allowed per user per minute. Defaults to `60`. |
+| `USER_RATE_LIMIT_PER_HOUR` | No | Authenticated API requests allowed per user per hour. Defaults to `1000`. |
+| `TRANSACTION_RATE_LIMIT_PER_MINUTE` | No | Deposit, withdrawal, and transfer requests allowed per user per minute. Defaults to `10`. |
 
 ## Database setup
 
@@ -308,6 +321,31 @@ Authorization: Bearer <token>
 
 Tokens contain the authenticated user's `id` and `email`, are signed with `JWT_SECRET`, and expire after one day. Missing or invalid tokens return `401` with `Token required` or `Invalid token`.
 
+## API rate limiting and request throttling
+
+The API applies fixed-window request controls before a request reaches its controller:
+
+| Traffic | Scope | Default |
+| --- | --- | --- |
+| Registration and login | Client IP address | 10 requests per 15 minutes |
+| Protected API routes | Authenticated user ID from the JWT | 60 requests per minute and 1,000 per hour |
+| Deposits, withdrawals, and transfers | Authenticated user ID from the JWT | 10 requests per minute, in addition to the general user limit |
+
+When a limit is exceeded, the API responds with `429 Too Many Requests` and a `Retry-After` header:
+
+```json
+{
+  "success": false,
+  "message": "Too many requests. Please try again later.",
+  "limit": "Transaction-Minute",
+  "retryAfterSeconds": 42
+}
+```
+
+Responses also include `X-RateLimit-*-Limit`, `X-RateLimit-*-Remaining`, and `X-RateLimit-*-Reset` headers. The controls limit requests only; they do not convert or aggregate amounts. Therefore each wallet retains its own currency and the existing exchange-rate conversion still runs exactly once for every permitted cross-currency transfer.
+
+The current limiter stores counters in memory. It is suitable for a single API instance and development assignment. Use Redis or another shared store for multiple instances, restarts, or production-grade distributed limits.
+
 ## Data model
 
 ```text
@@ -377,6 +415,7 @@ digital-wallet-api/
 - Keep `.env` out of version control and never place real credentials in documentation.
 - Serve the API over HTTPS outside local development.
 - Restrict CORS origins before production use; the current application permits all origins.
+- Tune rate-limit environment variables to the expected traffic and deploy a shared rate-limit store when horizontally scaling.
 - Do not treat the deposit endpoint as a real payment integration. It credits balances directly and has no payment-provider verification.
 - Cross-currency transfers rely on an external rate provider. Handle provider outages and consider storing the rate timestamp if financial reporting needs it.
 
@@ -391,7 +430,7 @@ These points reflect the current implementation and should be addressed before a
 - Password changes through `PUT /api/users/:id` are not hashed by the update service.
 - The login audit call uses `serId` rather than `userId`, so its audit log does not associate the login with the user.
 - The wallet-created audit record is written without an IP address.
-- The API has no transaction-history endpoint, pagination, rate limiting, or centralized error handler.
+- The API has no pagination or centralized error handler. Transaction history and single-instance rate limiting are available.
 - Wallet currency cannot be changed through the public API, even though `defaultCurrency` on the user can be updated.
 
 ## License

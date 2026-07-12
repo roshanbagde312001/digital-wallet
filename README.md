@@ -1,1 +1,399 @@
-.
+# Digital Wallet API
+
+A REST API for managing user accounts and single-currency digital wallets. Users can register, authenticate with JSON Web Tokens (JWTs), deposit and withdraw funds, and transfer money to another user's wallet. Transfers support currency conversion through the [Frankfurter exchange-rate API](https://www.frankfurter.app/).
+
+> This is a backend API only; it does not include a web or mobile client.
+
+## Contents
+
+- [Features](#features)
+- [Technology](#technology)
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Database setup](#database-setup)
+- [API reference](#api-reference)
+- [Authentication](#authentication)
+- [Data model](#data-model)
+- [Application flow](#application-flow)
+- [Project structure](#project-structure)
+- [Scripts](#scripts)
+- [Security and operational notes](#security-and-operational-notes)
+- [Known limitations](#known-limitations)
+
+## Features
+
+- User registration with bcrypt password hashing.
+- JWT login sessions that expire after one day.
+- One wallet is automatically created for every new user.
+- Configurable wallet currency at registration time (defaults to `USD`).
+- Wallet balance lookup, deposits, and withdrawals.
+- Wallet-to-wallet transfers with transactional balance updates.
+- Cross-currency transfers using current rates from Frankfurter.
+- Transaction records for deposits, withdrawals, and transfers.
+- Audit-log records for account creation, wallet creation, login, profile updates, deposits, withdrawals, and transfers.
+- HTTP hardening, CORS, JSON parsing, and development request logging.
+
+## Technology
+
+| Area | Package / service |
+| --- | --- |
+| Runtime | Node.js (CommonJS) |
+| Web framework | Express 5 |
+| Database / ORM | MySQL and Sequelize 6 |
+| Authentication | `jsonwebtoken` |
+| Password hashing | `bcrypt` |
+| Validation | `validator` plus application checks |
+| HTTP middleware | `cors`, `helmet`, `morgan` |
+| Currency conversion | Frankfurter API, requested with Axios |
+
+## Requirements
+
+- Node.js and npm
+- A running MySQL server
+- Network access to `api.frankfurter.app` when making transfers between different currencies
+
+## Quick start
+
+Run the following from the API directory:
+
+```bash
+cd digital-wallet-api
+npm install
+```
+
+Create or update `.env` using the variables shown below, create the database and tables, then start the API:
+
+```bash
+npm run dev
+```
+
+The server listens on `http://localhost:9000` by default. Confirm it is running:
+
+```bash
+curl http://localhost:9000/api/healths
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "message": "Digital Wallet Server is running"
+}
+```
+
+## Configuration
+
+Create `digital-wallet-api/.env` (never commit its secret values):
+
+```dotenv
+PORT=9000
+NODE_ENV=development
+
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=digital_wallet
+DB_USER=root
+DB_PASSWORD=replace-with-your-password
+
+# Required by login and every protected endpoint. Use a long random value.
+JWT_SECRET=replace-with-a-long-random-secret
+```
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `PORT` | No | HTTP port. Defaults to `9000`. |
+| `NODE_ENV` | No | Runtime environment label, for example `development`. |
+| `DB_HOST` | Yes | MySQL host. |
+| `DB_PORT` | Yes | MySQL port, normally `3306`. |
+| `DB_NAME` | Yes | Database name. |
+| `DB_USER` | Yes | Database user. |
+| `DB_PASSWORD` | Yes | Database password. |
+| `JWT_SECRET` | Yes | Secret used to sign and verify access tokens. |
+
+## Database setup
+
+Create the database first:
+
+```sql
+CREATE DATABASE digital_wallet
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+```
+
+The application verifies database connectivity at startup, but it does **not** currently create or migrate tables automatically: the `sequelize.sync()` line in `src/server.js` is commented out. For local development, you may temporarily uncomment this line:
+
+```js
+await sequelize.sync({ alter: true });
+```
+
+Start the server once to let Sequelize create/update the schema, then remove or comment the line again. For shared or production environments, use reviewed Sequelize migrations rather than `sync({ alter: true })`.
+
+The required tables are `users`, `wallets`, `transactions`, and `audit_logs`. Their fields and relationships are described in [Data model](#data-model).
+
+## API reference
+
+Base URL: `http://localhost:9000`
+
+Protected endpoints require `Authorization: Bearer <token>`. Amounts may be sent as JSON numbers or numeric strings; they must be greater than zero.
+
+### Health check
+
+#### `GET /api/healths`
+
+Reports whether the HTTP server is running. This route does not require authentication.
+
+### Users
+
+#### `POST /api/users/register`
+
+Creates a user and its wallet in a database transaction.
+
+Request body:
+
+```json
+{
+  "name": "Ava Patel",
+  "email": "ava@example.com",
+  "password": "secure-password",
+  "defaultCurrency": "USD"
+}
+```
+
+| Field | Required | Rules |
+| --- | --- | --- |
+| `name` | Yes | Must be present. |
+| `email` | Yes | Must be a valid email and unique. |
+| `password` | Yes | At least 6 characters. |
+| `defaultCurrency` | No | Wallet currency; defaults to `USD`. |
+
+Success: `201 Created`. The response is the Sequelize user object. It currently includes the stored password hash, so consumers should handle this response carefully.
+
+Common errors: `400 Bad Request` for invalid fields or an email that already exists.
+
+#### `POST /api/users/login`
+
+Authenticates a user and returns a one-day JWT.
+
+```json
+{
+  "email": "ava@example.com",
+  "password": "secure-password"
+}
+```
+
+Success response (`200 OK`):
+
+```json
+{
+  "token": "<jwt>",
+  "user": {
+    "id": 1,
+    "name": "Ava Patel",
+    "email": "ava@example.com"
+  }
+}
+```
+
+Invalid credentials return `401 Unauthorized`.
+
+#### `PUT /api/users/:id`
+
+Updates a user. Authentication is required.
+
+```json
+{
+  "name": "Ava Shah",
+  "defaultCurrency": "EUR"
+}
+```
+
+At least one of `name`, `email`, or `defaultCurrency` must be supplied. If a password is supplied, it must contain at least six characters. The route returns the updated user object.
+
+> Updating `defaultCurrency` updates the user record only; it does not change the existing wallet's `currency`.
+
+#### `GET /api/users/profile/:id`
+
+Returns the user identified by `:id`. Authentication is required.
+
+#### `GET /api/users/alluser`
+
+Returns all users. Authentication is required.
+
+> The current authorization middleware validates a token but does not enforce ownership or roles. Any authenticated user can call the profile, update, and list-user routes. See [Known limitations](#known-limitations).
+
+### Wallet
+
+#### `GET /api/wallet/`
+
+Returns the authenticated user's wallet.
+
+Success response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "balance": "0.00",
+    "currency": "USD",
+    "status": "ACTIVE"
+  }
+}
+```
+
+#### `POST /api/wallet/deposit`
+
+Adds funds to the authenticated user's active wallet and creates a `DEPOSIT` transaction.
+
+```json
+{
+  "amount": 125.5
+}
+```
+
+Success: `200 OK` with `{ "success": true, "message": "Funds added successfully", "data": { ... } }`.
+
+#### `POST /api/wallet/withdraw`
+
+Subtracts funds from the authenticated user's active wallet and creates a `WITHDRAW` transaction.
+
+```json
+{
+  "amount": 25
+}
+```
+
+The request fails with `400 Bad Request` when the wallet is inactive or lacks sufficient funds.
+
+#### `POST /api/wallet/transfer`
+
+Transfers funds from the authenticated user's wallet to another user's wallet.
+
+```json
+{
+  "receiverUserId": 2,
+  "amount": 50
+}
+```
+
+The sender is debited in the sender wallet currency. The receiver is credited in the receiver wallet currency. If the currencies differ, the API requests the current exchange rate and saves it on the transaction. The balance updates and transaction insert execute within one database transaction.
+
+Common errors: `400 Bad Request` for missing/invalid amounts, nonexistent wallets, insufficient sender balance, or unavailable exchange rates.
+
+### Standard error shapes
+
+User routes generally return:
+
+```json
+{ "message": "Error description" }
+```
+
+Wallet routes generally return:
+
+```json
+{ "success": false, "message": "Error description" }
+```
+
+## Authentication
+
+1. Call `POST /api/users/login`.
+2. Copy the returned `token`.
+3. Send it with each protected request:
+
+```http
+Authorization: Bearer <token>
+```
+
+Tokens contain the authenticated user's `id` and `email`, are signed with `JWT_SECRET`, and expire after one day. Missing or invalid tokens return `401` with `Token required` or `Invalid token`.
+
+## Data model
+
+```text
+User (1) ──── (1) Wallet
+  │
+  └──── (many) AuditLog
+
+Wallet (1) ──── (many) Transaction, as sender
+Wallet (1) ──── (many) Transaction, as receiver
+```
+
+| Table | Important fields | Purpose |
+| --- | --- | --- |
+| `users` | `id`, `name`, `email` (unique), `password`, `defaultCurrency` | User identity and login credentials. |
+| `wallets` | `id`, `userId` (unique), `balance`, `currency`, `status` | One wallet per user; status is `ACTIVE` or `BLOCKED`. |
+| `transactions` | sender/receiver wallet IDs, amounts, currencies, `exchangeRate`, `transactionType`, `status`, `description` | Financial-event history. Types used: `DEPOSIT`, `WITHDRAW`, `TRANSFER`. |
+| `audit_logs` | `userId`, `action`, `entity`, old/new values, `ipAddress` | Operational audit trail. |
+
+Monetary fields are stored as MySQL `DECIMAL` values. Sequelize commonly serializes these values as strings in JSON responses; clients should parse them deliberately and avoid floating-point arithmetic for financial totals.
+
+## Application flow
+
+```text
+HTTP request
+  → Express middleware (JSON, CORS, Helmet, Morgan)
+  → route
+  → JWT middleware (protected routes)
+  → controller validation
+  → service layer
+  → Sequelize / MySQL
+  → JSON response
+```
+
+For deposits, withdrawals, and transfers, the service opens a database transaction and locks the involved wallet rows before changing balances. This helps prevent concurrent requests from spending the same balance twice.
+
+## Project structure
+
+```text
+digital-wallet-api/
+├── src/
+│   ├── app.js                 # Express application and routes
+│   ├── server.js              # Environment loading, server start, DB check
+│   ├── config/database.js     # Sequelize MySQL connection
+│   ├── controllers/           # HTTP request/response handling
+│   ├── middleware/            # JWT authentication
+│   ├── models/                # Sequelize models and associations
+│   ├── routes/                # User and wallet routes
+│   ├── services/              # Business logic and exchange-rate client
+│   ├── utils/                 # JWT and audit helpers
+│   └── validations/           # Request validation functions
+├── .env                       # Local configuration (keep private)
+├── package.json
+└── README.md
+```
+
+## Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm start` | Runs `node src/server.js`. |
+| `npm run dev` | Runs the server with Nodemon for automatic restarts. |
+| `npm test` | Present but not implemented; exits with an error. |
+
+## Security and operational notes
+
+- Use a long, unique `JWT_SECRET`; rotate it if exposed.
+- Keep `.env` out of version control and never place real credentials in documentation.
+- Serve the API over HTTPS outside local development.
+- Restrict CORS origins before production use; the current application permits all origins.
+- Do not treat the deposit endpoint as a real payment integration. It credits balances directly and has no payment-provider verification.
+- Cross-currency transfers rely on an external rate provider. Handle provider outages and consider storing the rate timestamp if financial reporting needs it.
+
+## Known limitations
+
+These points reflect the current implementation and should be addressed before a production deployment:
+
+- No migrations or production schema-management workflow.
+- No automated tests.
+- No authorization/ownership checks on user profile or update routes, and no administrative role model.
+- User responses can expose the password hash because user records are returned directly.
+- Password changes through `PUT /api/users/:id` are not hashed by the update service.
+- The login audit call uses `serId` rather than `userId`, so its audit log does not associate the login with the user.
+- The wallet-created audit record is written without an IP address.
+- The API has no transaction-history endpoint, pagination, rate limiting, or centralized error handler.
+- Wallet currency cannot be changed through the public API, even though `defaultCurrency` on the user can be updated.
+
+## License
+
+This project currently declares the `ISC` license in `package.json`.

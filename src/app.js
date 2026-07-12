@@ -4,6 +4,7 @@ const helmet = require("helmet")
 const morgan = require("morgan")
 const userRouter = require("./routes/user.routes")
 const walletRoutes = require("./routes/wallet.routes");
+const transationRoutes = require("./routes/transaction.routes");
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use(morgan("dev"));
 
 app.use("/api/users",userRouter)
 app.use("/api/wallet",walletRoutes)
+app.use("/api/transactions",transationRoutes)
 // health check api
 
 app.get("/api/healths",(req,res)=>{

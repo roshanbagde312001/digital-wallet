@@ -3,13 +3,31 @@ const positiveInteger = (value, fallback) => {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-module.exports = {
-    DAILY_TRANSACTION_LIMIT: 10000,
-    HIGH_VALUE_TRANSACTION_LIMIT: 5000,
-    SUSPICIOUS_TRANSACTION_COUNT: 5,
-    SUSPICIOUS_TIME_WINDOW: 10,
+const positiveNumber = (value, fallback) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
 
-    // API request controls. Values can be overridden in .env.
+module.exports = {
+    // Fraud rules use one base currency so multi-currency spending can be compared.
+    LIMIT_BASE_CURRENCY: process.env.LIMIT_BASE_CURRENCY || "USD",
+    DAILY_TRANSACTION_LIMIT: positiveNumber(
+        process.env.DAILY_TRANSACTION_LIMIT,
+        10000
+    ),
+    HIGH_VALUE_TRANSACTION_LIMIT: positiveNumber(
+        process.env.HIGH_VALUE_TRANSACTION_LIMIT,
+        5000
+    ),
+    SUSPICIOUS_TRANSACTION_COUNT: positiveInteger(
+        process.env.SUSPICIOUS_TRANSACTION_COUNT,
+        5
+    ),
+    SUSPICIOUS_TIME_WINDOW: positiveInteger(
+        process.env.SUSPICIOUS_TIME_WINDOW,
+        10
+    ),
+
     AUTH_RATE_LIMIT_MAX: positiveInteger(process.env.AUTH_RATE_LIMIT_MAX, 10),
     AUTH_RATE_LIMIT_WINDOW_MS: positiveInteger(
         process.env.AUTH_RATE_LIMIT_WINDOW_MS,

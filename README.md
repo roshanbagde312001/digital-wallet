@@ -101,6 +101,13 @@ DB_PASSWORD=replace-with-your-password
 # Required by login and every protected endpoint. Use a long random value.
 JWT_SECRET=replace-with-a-long-random-secret
 
+# Multi-currency fraud and transaction-limit controls (optional defaults shown)
+LIMIT_BASE_CURRENCY=USD
+DAILY_TRANSACTION_LIMIT=10000
+HIGH_VALUE_TRANSACTION_LIMIT=5000
+SUSPICIOUS_TRANSACTION_COUNT=5
+SUSPICIOUS_TIME_WINDOW=10
+
 # API rate limiting (optional defaults shown)
 AUTH_RATE_LIMIT_MAX=10
 AUTH_RATE_LIMIT_WINDOW_MS=900000
@@ -119,6 +126,11 @@ TRANSACTION_RATE_LIMIT_PER_MINUTE=10
 | `DB_USER` | Yes | Database user. |
 | `DB_PASSWORD` | Yes | Database password. |
 | `JWT_SECRET` | Yes | Secret used to sign and verify access tokens. |
+| `LIMIT_BASE_CURRENCY` | No | Currency used to compare multi-currency spending limits. Defaults to `USD`. |
+| `DAILY_TRANSACTION_LIMIT` | No | Maximum total outgoing withdrawals and transfers per user per UTC day, in the base currency. Defaults to `10000`. |
+| `HIGH_VALUE_TRANSACTION_LIMIT` | No | Amount (in the base currency) considered high value for suspicious-activity checks. Defaults to `5000`. |
+| `SUSPICIOUS_TRANSACTION_COUNT` | No | Number of high-value outgoing transactions allowed in the window before the request is blocked. Defaults to `5`. |
+| `SUSPICIOUS_TIME_WINDOW` | No | Suspicious-activity lookback window in minutes. Defaults to `10`. |
 | `AUTH_RATE_LIMIT_MAX` | No | Login/registration requests allowed per IP in the authentication window. Defaults to `10`. |
 | `AUTH_RATE_LIMIT_WINDOW_MS` | No | Authentication limit window in milliseconds. Defaults to `900000` (15 minutes). |
 | `USER_RATE_LIMIT_PER_MINUTE` | No | Authenticated API requests allowed per user per minute. Defaults to `60`. |
@@ -346,6 +358,18 @@ Responses also include `X-RateLimit-*-Limit`, `X-RateLimit-*-Remaining`, and `X-
 
 The current limiter stores counters in memory. It is suitable for a single API instance and development assignment. Use Redis or another shared store for multiple instances, restarts, or production-grade distributed limits.
 
+## Fraud detection and transaction limits
+
+Before a withdrawal or transfer changes a wallet balance, the API applies these checks:
+
+1. It converts the requested outgoing amount and the user's successful outgoing transactions into `LIMIT_BASE_CURRENCY` (`USD` by default).
+2. It blocks the request if the total for the current UTC day would exceed `DAILY_TRANSACTION_LIMIT`.
+3. For a high-value request, it counts prior high-value withdrawals/transfers made in the preceding `SUSPICIOUS_TIME_WINDOW`. The request is blocked when including it reaches `SUSPICIOUS_TRANSACTION_COUNT`.
+
+Blocked activity returns `400 Bad Request` with the applicable reason and creates an `audit_logs` record with action `FRAUD_TRANSACTION_BLOCKED`. Deposits are not counted because they do not move value out of a wallet. Exchange rates are fetched at validation time so limits are applied consistently across currencies.
+
+For production financial systems, preserve the historical rate used for every limit calculation or store a normalized base-currency amount with each transaction. The current implementation uses the latest available rate when evaluating prior transactions.
+
 ## Data model
 
 ```text
@@ -432,6 +456,7 @@ These points reflect the current implementation and should be addressed before a
 - The wallet-created audit record is written without an IP address.
 - The API has no pagination or centralized error handler. Transaction history and single-instance rate limiting are available.
 - Wallet currency cannot be changed through the public API, even though `defaultCurrency` on the user can be updated.
+- Fraud-limit checks are performed in the application process and use current exchange rates for historical transaction normalization; production systems should persist the normalized amount/rate used for each check.
 
 ## License
 

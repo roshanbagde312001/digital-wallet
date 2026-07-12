@@ -1,11 +1,5 @@
 const config = require("../config/wallet.config");
 
-/*
- * Fixed-window, in-memory rate limiter.
- * Authenticated requests are keyed by user ID; unauthenticated requests use
- * the client IP address. For a multi-instance deployment, replace the Map
- * store with a shared Redis-backed implementation.
- */
 const createRateLimiter = ({ name, windowMs, maxRequests, keyGenerator }) => {
     const requests = new Map();
     let cleanupCounter = 0;

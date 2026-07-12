@@ -2,6 +2,24 @@ const sequelize = require("../config/database");
 const { Wallet, Transaction } = require("../models")
 const { createAudit } = require("../utils/audit")
 const exchangeService = require("./exchange.service")
+const fraudService = require("./fraud.service");
+
+const recordBlockedTransaction = async (userId, error) => {
+    if (!error.fraudDetails) {
+        return;
+    }
+
+    try {
+        await createAudit({
+            userId,
+            action: "FRAUD_TRANSACTION_BLOCKED",
+            entity: "TRANSACTION",
+            newValue: error.fraudDetails
+        });
+    } catch (auditError) {
+        console.error("Unable to record blocked transaction audit", auditError.message);
+    }
+};
 exports.creatWallet = async (user, options) => {
     console.log("rosns", user.dataValues.id)
     const wallet = await Wallet.findOne({
@@ -144,6 +162,13 @@ exports.withDraw = async (userId, amount) => {
             throw new Error("Insufficient wallet balance")
         }
 
+        await fraudService.validateOutgoingTransaction({
+            walletId: wallet.id,
+            amount: withdrawmount,
+            currency: wallet.currency,
+            transaction: t
+        });
+
         const newBalance = oldBalance - withdrawmount;
         await Wallet.update({
             balance: newBalance
@@ -190,6 +215,7 @@ exports.withDraw = async (userId, amount) => {
         };
     } catch (error) {
         await t.rollback();
+        await recordBlockedTransaction(userId, error);
 
         throw error;
     }
@@ -234,6 +260,13 @@ exports.transfer = async (senderUserId, data) => {
         if (senderBalance < amount) {
             throw new Error("Insufficient balance");
         }
+
+        await fraudService.validateOutgoingTransaction({
+            walletId: senderWallet.id,
+            amount,
+            currency: senderWallet.currency,
+            transaction: t
+        });
 
 
         const exchangeRate = await exchangeService.getExchangeRate(
@@ -294,6 +327,7 @@ exports.transfer = async (senderUserId, data) => {
     }
     catch (error) {
         await t.rollback();
+        await recordBlockedTransaction(senderUserId, error);
         throw error;
     }
 };

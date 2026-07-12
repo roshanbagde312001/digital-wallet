@@ -8,9 +8,10 @@ const createAudit = async(data)=>{
         entity:data.entity,
         entityId:data.entityId,
         oldValue:data.oldValue,
-        newValue:data.oldValue,
         newValue:data.newValue,
         ipAddress:data.ipAddress
+    }, {
+        transaction:data.transaction
     })
 };
 

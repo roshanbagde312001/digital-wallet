@@ -2,7 +2,7 @@ const transactionService = require("../services/transaction.service");
 
 exports.getHistory = async (req, res) => {
     try {
-        const transactions = await transactionService.getTransactions(
+        const result = await transactionService.getTransactions(
             req.user.id,
             req.query
         );
@@ -10,7 +10,8 @@ exports.getHistory = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            data: transactions
+            data: result.transactions,
+            pagination: result.pagination
         });
     }
     catch (error) {

@@ -1,6 +1,23 @@
 const { Op } = require("sequelize");
 const { Transaction, Wallet, User } = require("../models");
 
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 10;
+const MAX_LIMIT = 100;
+
+const parsePositiveInteger = (value, fallback, fieldName) => {
+    if (value === undefined) {
+        return fallback;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+        throw new Error(`${fieldName} must be a positive integer`);
+    }
+
+    return parsed;
+};
+
 exports.getTransactions = async (
     userId,
     filters = {}
@@ -30,8 +47,17 @@ exports.getTransactions = async (
             filters.type;
     }
 
-    const transactions =
-        await Transaction.findAll({
+    const page = parsePositiveInteger(filters.page, DEFAULT_PAGE, "page");
+    const requestedLimit = parsePositiveInteger(
+        filters.limit,
+        DEFAULT_LIMIT,
+        "limit"
+    );
+    const limit = Math.min(requestedLimit, MAX_LIMIT);
+    const offset = (page - 1) * limit;
+
+    const { count, rows } =
+        await Transaction.findAndCountAll({
             where,
             include: [
                 {
@@ -60,8 +86,23 @@ exports.getTransactions = async (
                     "createdAt",
                     "DESC"
                 ]
-            ]
+            ],
+            limit,
+            offset,
+            distinct: true
         });
-    return transactions;
+    const totalPages = Math.ceil(count / limit);
+
+    return {
+        transactions: rows,
+        pagination: {
+            page,
+            limit,
+            totalItems: count,
+            totalPages,
+            hasNextPage: page < totalPages,
+            hasPreviousPage: page > 1
+        }
+    };
 
 };

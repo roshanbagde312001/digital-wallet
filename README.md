@@ -307,6 +307,44 @@ The sender is debited in the sender wallet currency. The receiver is credited in
 
 Common errors: `400 Bad Request` for missing/invalid amounts, nonexistent wallets, insufficient sender balance, or unavailable exchange rates.
 
+### Transaction history
+
+#### `GET /api/transactions/`
+
+Returns the authenticated user's transactions, newest first. Results are paginated.
+
+| Query parameter | Required | Default | Rules |
+| --- | --- | --- | --- |
+| `page` | No | `1` | Positive integer. |
+| `limit` | No | `10` | Positive integer; values above `100` are capped at `100`. |
+| `type` | No | — | Filter by `DEPOSIT`, `WITHDRAW`, or `TRANSFER`. |
+
+Example:
+
+```http
+GET /api/transactions/?page=2&limit=10&type=TRANSFER
+Authorization: Bearer <token>
+```
+
+Success response:
+
+```json
+{
+  "success": true,
+  "data": [],
+  "pagination": {
+    "page": 2,
+    "limit": 10,
+    "totalItems": 24,
+    "totalPages": 3,
+    "hasNextPage": true,
+    "hasPreviousPage": true
+  }
+}
+```
+
+Every transaction includes safe nested counterparties where applicable: `senderWallet.user` and `receiverWallet.user`, each with `id`, `name`, and `email` only.
+
 ### Standard error shapes
 
 User routes generally return:
@@ -456,7 +494,7 @@ These points reflect the current implementation and should be addressed before a
 - Password changes through `PUT /api/users/:id` are not hashed by the update service.
 - The login audit call uses `serId` rather than `userId`, so its audit log does not associate the login with the user.
 - The wallet-created audit record is written without an IP address.
-- The API has no pagination or centralized error handler. Transaction history and single-instance rate limiting are available.
+- The API has no centralized error handler. Transaction history is paginated and single-instance rate limiting is available.
 - Wallet currency cannot be changed through the public API, even though `defaultCurrency` on the user can be updated.
 - Fraud-limit checks are performed in the application process and use current exchange rates for historical transaction normalization; production systems should persist the normalized amount/rate used for each check.
 

@@ -1,6 +1,7 @@
 const sequelize = require("../config/database");
 const { Wallet, Transaction } = require("../models")
 const { createAudit } = require("../utils/audit")
+const exchangeService = require("./exchange.service")
 exports.creatWallet = async (user, options) => {
     console.log("rosns", user.dataValues.id)
     const wallet = await Wallet.findOne({
@@ -193,3 +194,106 @@ exports.withDraw = async (userId, amount) => {
         throw error;
     }
 }
+
+
+
+exports.transfer = async (senderUserId, data) => {
+
+    const t = await sequelize.transaction();
+    try {
+        const senderWallet =
+            await Wallet.findOne({
+                where: {
+                    userId: senderUserId
+                },
+                transaction: t,
+                lock: "UPDATE"
+            });
+
+        if (!senderWallet) {
+            throw new Error("Sender wallet not found");
+        }
+
+        const receiverWallet = await Wallet.findOne({
+            where: {
+                userId: data.receiverUserId
+            },
+            transaction: t,
+            lock: "UPDATE"
+        });
+
+        if (!receiverWallet) {
+            throw new Error("Receiver wallet not found");
+        }
+
+        const amount = Number(data.amount);
+
+        const senderBalance = Number(senderWallet.balance);
+
+
+        if (senderBalance < amount) {
+            throw new Error("Insufficient balance");
+        }
+
+
+        const exchangeRate = await exchangeService.getExchangeRate(
+            senderWallet.currency,
+            receiverWallet.currency
+        );
+
+
+        const receiverAmount = amount * exchangeRate;
+        const senderNewBalance = senderBalance - amount;
+        const receiverNewBalance = Number(receiverWallet.balance) + receiverAmount;
+        await senderWallet.update({ balance: senderNewBalance },
+            {
+                transaction: t
+            });
+
+
+        await receiverWallet.update({ balance: receiverNewBalance },
+            {
+                transaction: t
+            });
+
+        const transaction =
+            await Transaction.create({
+                senderWalletId: senderWallet.id,
+                receiverWalletId: receiverWallet.id,
+                transactionType: "TRANSFER",
+                senderAmount: amount,
+                senderCurrency: senderWallet.currency,
+                receiverAmount: receiverAmount,
+                receiverCurrency: receiverWallet.currency,
+                exchangeRate,
+                status: "SUCCESS",
+                description: "Wallet transfer"
+            }, {
+                transaction: t
+            });
+
+        await createAudit({
+            userId: senderUserId,
+            action: "TRANSFER",
+            entity: "TRANSACTION",
+            entityId: transaction.id,
+            oldValue: {
+                balance: senderBalance
+            },
+            newValue: {
+                balance: senderNewBalance
+            },
+            transaction: t
+        });
+        await t.commit();
+        return {
+            transaction,
+            senderWallet,
+            receiverWallet
+        };
+    }
+    catch (error) {
+        await t.rollback();
+        throw error;
+    }
+};

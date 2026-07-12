@@ -1,5 +1,6 @@
+const { getExchangeRate } = require("../services/exchange.service");
 const walletService = require("../services/wallet.service");
-const { validateDeposit, validateWithdraw } = require("../validations/wallet.validation");
+const { validateDeposit, validateWithdraw, validateTransfer } = require("../validations/wallet.validation");
 
 
 exports.getWallet = async (req, res) => {
@@ -42,29 +43,54 @@ exports.deposit = async (req, res) => {
             data: result
         });
     } catch (error) {
-            return res.status(400).json({
-            success:false,
-            message:error.message
+        return res.status(400).json({
+            success: false,
+            message: error.message
         });
     }
 }
 
-exports.widDraw = async(req,res)=>{
-    try{
+exports.widDraw = async (req, res) => {
+    try {
         validateWithdraw(req.body);
 
-        const result = await walletService.withDraw(req.user.id,req.body.amount);
-        
+        const result = await walletService.withDraw(req.user.id, req.body.amount);
+
         return res.status(200).json({
-            success:true,
-            message:"Withdrawal successful",
-            data:result
+            success: true,
+            message: "Withdrawal successful",
+            data: result
         });
-    
-    }catch(error){
+
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error.message
+            success: false,
+            message: error.message
         })
     }
+}
+
+
+exports.transfer = async (req, res) => {
+
+    try {
+        validateTransfer(req.body);
+        const result =
+            await walletService.transfer(
+                req.user.id,
+                req.body
+            );
+        return res.status(200).json({
+            success: true,
+            message: "Transfer successful",
+            data: result
+        });
+    }
+    catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+
 }

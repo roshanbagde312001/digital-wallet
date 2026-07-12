@@ -390,6 +390,8 @@ Wallet (1) ──── (many) Transaction, as receiver
 
 Monetary fields are stored as MySQL `DECIMAL` values. Sequelize commonly serializes these values as strings in JSON responses; clients should parse them deliberately and avoid floating-point arithmetic for financial totals.
 
+Transaction-history responses include `senderWallet.user` and `receiverWallet.user` when applicable. Each nested user contains only `id`, `name`, and `email`, allowing clients to display the transfer counterparty without exposing password data.
+
 ## Application flow
 
 ```text

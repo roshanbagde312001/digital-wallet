@@ -1,4 +1,5 @@
-const {Transaction,Wallet} = require("../models");
+const { Op } = require("sequelize");
+const { Transaction, Wallet, User } = require("../models");
 
 exports.getTransactions = async (
     userId,
@@ -18,7 +19,12 @@ exports.getTransactions = async (
     }
 
 
-    const where = {};
+    const where = {
+        [Op.or]: [
+            { senderWalletId: wallet.id },
+            { receiverWalletId: wallet.id }
+        ]
+    };
     if (filters.type) {
         where.transactionType =
             filters.type;
@@ -31,18 +37,22 @@ exports.getTransactions = async (
                 {
                     model: Wallet,
                     as: "senderWallet",
-                    where: {
-                        id: wallet.id
-                    },
-                    required: false
+                    attributes: ["id", "userId", "currency"],
+                    include: [{
+                        model: User,
+                        as: "user",
+                        attributes: ["id", "name", "email"]
+                    }]
                 },
                 {
                     model: Wallet,
                     as: "receiverWallet",
-                    where: {
-                        id: wallet.id
-                    },
-                    required: false
+                    attributes: ["id", "userId", "currency"],
+                    include: [{
+                        model: User,
+                        as: "user",
+                        attributes: ["id", "name", "email"]
+                    }]
                 }
             ],
             order: [

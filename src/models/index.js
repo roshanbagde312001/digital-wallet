@@ -31,7 +31,8 @@ User.hasOne(
 Wallet.belongsTo(
     User,
     {
-        foreignKey:"userId"
+        foreignKey:"userId",
+        as:"user"
     }
 );
 
@@ -66,6 +67,5 @@ module.exports = {
     Wallet,
     Transaction
 };
-
 
 

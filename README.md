@@ -473,31 +473,3 @@ digital-wallet-api/
 | `npm run dev` | Runs the server with Nodemon for automatic restarts. |
 | `npm test` | Present but not implemented; exits with an error. |
 
-## Security and operational notes
-
-- Use a long, unique `JWT_SECRET`; rotate it if exposed.
-- Keep `.env` out of version control and never place real credentials in documentation.
-- Serve the API over HTTPS outside local development.
-- Restrict CORS origins before production use; the current application permits all origins.
-- Tune rate-limit environment variables to the expected traffic and deploy a shared rate-limit store when horizontally scaling.
-- Do not treat the deposit endpoint as a real payment integration. It credits balances directly and has no payment-provider verification.
-- Cross-currency transfers rely on an external rate provider. Handle provider outages and consider storing the rate timestamp if financial reporting needs it.
-
-## Known limitations
-
-These points reflect the current implementation and should be addressed before a production deployment:
-
-- No migrations or production schema-management workflow.
-- No automated tests.
-- No authorization/ownership checks on user profile or update routes, and no administrative role model.
-- User responses can expose the password hash because user records are returned directly.
-- Password changes through `PUT /api/users/:id` are not hashed by the update service.
-- The login audit call uses `serId` rather than `userId`, so its audit log does not associate the login with the user.
-- The wallet-created audit record is written without an IP address.
-- The API has no centralized error handler. Transaction history is paginated and single-instance rate limiting is available.
-- Wallet currency cannot be changed through the public API, even though `defaultCurrency` on the user can be updated.
-- Fraud-limit checks are performed in the application process and use current exchange rates for historical transaction normalization; production systems should persist the normalized amount/rate used for each check.
-
-## License
-
-This project currently declares the `ISC` license in `package.json`.
